@@ -6,7 +6,7 @@ import org.sonatype.aether.repository.RemoteRepository
 import org.sonatype.aether.spi.log.Logger
 import org.sonatype.aether.spi.io.FileProcessor
 import org.sonatype.aether.RepositorySystemSession
-import aether.sbtlayout.SbtPluginLayout
+import aether.layout.SbtPluginLayout
 
 /**
  * @author Erlend Hamnaberg<erlend@hamnaberg.net>
@@ -14,20 +14,14 @@ import aether.sbtlayout.SbtPluginLayout
 class AsyncRepositoryConnectorDelegateHack(repository: RemoteRepository, session: RepositorySystemSession, fileProcessor: FileProcessor, logger: Logger) extends RepositoryConnector {
 
   val delegate = {
+    val del = new AsyncRepositoryConnector(new RemoteRepository(repository).setContentType("default"), session, fileProcessor, logger)
     if ("sbt-plugin".equals(repository.getContentType)) {
-      val hack = new RemoteRepository(repository).setContentType("default")
-      val del = new AsyncRepositoryConnector(hack, session, fileProcessor, logger)
-      val field = scala.util.control.Exception.allCatch.opt(del.getClass.getDeclaredField("layout"))
-
-      field.foreach{ f =>
+      scala.util.control.Exception.allCatch.opt(del.getClass.getDeclaredField("layout")).foreach{ f =>
         f.setAccessible(true)
         f.set(del, new SbtPluginLayout)
       }
-      del
-    } else {
-      new AsyncRepositoryConnector(repository, session, fileProcessor, logger)
     }
-
+    del
   }
 
   def get(artifactDownloads: util.Collection[_ <: ArtifactDownload], metadataDownloads: util.Collection[_ <: MetadataDownload]) {

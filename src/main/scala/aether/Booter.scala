@@ -12,14 +12,18 @@ import sbt.std.TaskStreams
 import org.apache.maven.wagon.providers.ssh.jsch.{SftpWagon, ScpWagon}
 import org.apache.maven.wagon.providers.ftp.FtpWagon
 import org.sonatype.aether.connector.async.AsyncRepositoryConnectorFactory2
+import org.sonatype.aether.impl.MetadataGeneratorFactory
 
 object Booter {
-  def newRepositorySystem = {
+  def newRepositorySystem(plugin: Boolean) = {
     val locator = new MavenServiceLocator()
     locator.addService(classOf[RepositoryConnectorFactory], classOf[FileRepositoryConnectorFactory])
     locator.addService(classOf[RepositoryConnectorFactory], classOf[AsyncRepositoryConnectorFactory2])
     locator.addService(classOf[RepositoryConnectorFactory], classOf[WagonRepositoryConnectorFactory])
     locator.setServices(classOf[WagonProvider], ManualWagonProvider)
+    if (plugin) {
+      locator.setServices(classOf[MetadataGeneratorFactory])
+    }
     locator.getService(classOf[RepositorySystem])
   }
 

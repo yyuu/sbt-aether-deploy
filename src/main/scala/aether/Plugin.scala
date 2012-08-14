@@ -2,12 +2,10 @@ package aether
 
 import sbt._
 import sbt.Keys._
-import java.util.Collections
 import org.sonatype.aether.util.artifact.{SubArtifact, DefaultArtifact}
 import org.sonatype.aether.deployment.DeployRequest
 import org.sonatype.aether.repository.{Authentication, RemoteRepository}
 import java.net.URI
-import sbtlayout.SbtPluginLayout
 
 object Aether extends sbt.Plugin {
   lazy val aetherArtifact = TaskKey[AetherArtifact]("aether-artifact", "Main artifact")
@@ -23,13 +21,11 @@ object Aether extends sbt.Plugin {
 
   lazy val aetherPublishSettings: Seq[Setting[_]] = aetherSettings ++ Seq(publish <<= deploy)
 
-  lazy val defaultCoordinates = coordinates <<= (organization, name, version, scalaBinaryVersion, sbtPlugin).apply{
-    (o, n, v, scalaV, plugin) => {
-      /*if (plugin) {
-        sys.error("SBT is using maven incorrectly, meaning you will have to use sbt publish for sbt-plugins")
-      }*/
+  lazy val defaultCoordinates = coordinates <<= (organization, name, version, scalaBinaryVersion, sbtPlugin, sbtBinaryVersion).apply{
+    (o, n, v, scalaV, plugin, sbtV) => {
       val aId = if (plugin) n else "%s_%s".format(n, scalaV)
-      MavenCoordinates(o, aId, v, None)
+      val coords = MavenCoordinates(o, aId, v, None)
+      if (plugin) coords.withSbtVersion(sbtV).withScalaVersion(scalaV) else coords
     }
   }
   
@@ -42,12 +38,12 @@ object Aether extends sbt.Plugin {
     }
   }
 
-  lazy val deployTask = deploy <<= (publishTo, credentials, aetherArtifact, streams, sbtPlugin, sbtBinaryVersion, scalaBinaryVersion).map{
-    (repo: Option[Resolver], cred: Seq[Credentials], artifact: AetherArtifact, s: TaskStreams, plugin: Boolean, sbtV: String, scalaV: String) => {
+  lazy val deployTask = deploy <<= (publishTo, credentials, aetherArtifact, streams).map{
+    (repo: Option[Resolver], cred: Seq[Credentials], artifact: AetherArtifact, s: TaskStreams) => {
       val repository = repo.collect{
         case x: MavenRepository => x
         case _ => sys.error("The configured repo MUST be a maven repo")
-      }.getOrElse(sys.error("There MUST be a configured publish repo"))
+      }.getOrElse(sys.error("There MUST be a configured maven publish repo"))
       val maybeCred = scala.util.control.Exception.allCatch.opt(
         URI.create(repository.root)
       ).flatMap(href => {
@@ -57,11 +53,7 @@ object Aether extends sbt.Plugin {
         }
         c
       })
-      val actualArtifact = if (plugin) {
-        val coords = artifact.coordinates.addProperty(SbtPluginLayout.SBT_VERSION, sbtV).addProperty(SbtPluginLayout.SCALA_VERSION, scalaV)
-        artifact.copy(coordinates = coords)
-      } else artifact
-      deployIt(actualArtifact, toRepository(repository, plugin, maybeCred))(s)
+      deployIt(artifact, toRepository(repository, artifact.isSbtPlugin, maybeCred))(s)
     }}
 
   private def getActualExtension(file: File) = {
@@ -84,7 +76,7 @@ object Aether extends sbt.Plugin {
     val parent = artifact.toArtifact
     request.addArtifact(parent)
     artifact.subartifacts.foreach(s => request.addArtifact(s.toArtifact(parent)))
-    implicit val system = Booter.newRepositorySystem
+    implicit val system = Booter.newRepositorySystem(artifact.isSbtPlugin)
     implicit val localRepo = Path.userHome / ".m2" / "repository"
 
     try {
@@ -99,9 +91,17 @@ object Aether extends sbt.Plugin {
 case class MavenCoordinates(groupId: String, artifactId: String, version: String, classifier: Option[String], extension: String = "jar", props: Map[String, String] = Map.empty) {
   def coordinates = "%s:%s:%s%s:%s".format(groupId, artifactId, extension, classifier.map(_ + ":").getOrElse(""), version)
   def addProperty(name: String, value: String) = copy(props = props + (name -> value))
+
+  def withSbtVersion(version: String) = addProperty(MavenCoordinates.SbtVersion, version)
+  def withScalaVersion(version: String) = addProperty(MavenCoordinates.ScalaVersion, version)
 }
 
 object MavenCoordinates {
+  val SbtVersion: String = "sbt-version"
+  val ScalaVersion: String = "scala-version"
+  val DefaultSbtVersion: String = "0.12"
+  val DefaultScalaVersion: String = "2.9.2"
+
   def apply(coords: String): Option[MavenCoordinates] = coords.split(":") match {
     case Array(groupId, artifactId, extension, v) =>
       Some(MavenCoordinates(groupId, artifactId, v, None, extension))
@@ -118,6 +118,8 @@ case class AetherSubArtifact(file: File, classifier: Option[String] = None, exte
 }
 
 case class AetherArtifact(file: File, coordinates: MavenCoordinates, subartifacts: Seq[AetherSubArtifact] = Nil) {
+  def isSbtPlugin = coordinates.props.contains(MavenCoordinates.SbtVersion)
+
   def toArtifact = {
     import scala.collection.JavaConverters._
     new DefaultArtifact(
