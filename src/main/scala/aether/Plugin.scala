@@ -7,6 +7,7 @@ import org.sonatype.aether.util.artifact.{SubArtifact, DefaultArtifact}
 import org.sonatype.aether.deployment.DeployRequest
 import org.sonatype.aether.repository.{Authentication, RemoteRepository}
 import java.net.URI
+import sbtlayout.SbtPluginLayout
 
 object Aether extends sbt.Plugin {
   lazy val aetherArtifact = TaskKey[AetherArtifact]("aether-artifact", "Main artifact")
@@ -41,8 +42,8 @@ object Aether extends sbt.Plugin {
     }
   }
 
-  lazy val deployTask = deploy <<= (publishTo, credentials, aetherArtifact, streams).map{
-    (repo: Option[Resolver], cred: Seq[Credentials], artifact: AetherArtifact, s: TaskStreams) => {
+  lazy val deployTask = deploy <<= (publishTo, credentials, aetherArtifact, streams, sbtPlugin, sbtBinaryVersion, scalaBinaryVersion).map{
+    (repo: Option[Resolver], cred: Seq[Credentials], artifact: AetherArtifact, s: TaskStreams, plugin: Boolean, sbtV: String, scalaV: String) => {
       val repository = repo.collect{
         case x: MavenRepository => x
         case _ => sys.error("The configured repo MUST be a maven repo")
@@ -56,8 +57,11 @@ object Aether extends sbt.Plugin {
         }
         c
       })
-
-      deployIt(artifact, repository, maybeCred)(s)
+      val actualArtifact = if (plugin) {
+        val coords = artifact.coordinates.addProperty(SbtPluginLayout.SBT_VERSION, sbtV).addProperty(SbtPluginLayout.SCALA_VERSION, scalaV)
+        artifact.copy(coordinates = coords)
+      } else artifact
+      deployIt(artifact, toRepository(repository, plugin, maybeCred))(s)
     }}
 
   private def getActualExtension(file: File) = {
@@ -65,17 +69,18 @@ object Aether extends sbt.Plugin {
     name.substring(name.lastIndexOf('.') + 1)
   }
     
-  private def toRepository(repo: MavenRepository, credentials: Option[DirectCredentials]) = {
-    val r = new RemoteRepository(repo.name, "default", repo.root)
+  private def toRepository(repo: MavenRepository, plugin: Boolean, credentials: Option[DirectCredentials]):RemoteRepository = {
+    val contentType = if (plugin) "sbt-plugin" else "default"
+    val r = new RemoteRepository(repo.name, contentType, repo.root)
     credentials.foreach(c => {
       r.setAuthentication(new Authentication(c.userName, c.passwd))
     })
     r
   }
 
-  private def deployIt(artifact: AetherArtifact, repo: MavenRepository, credentials: Option[DirectCredentials])(implicit streams: TaskStreams) {
+  private def deployIt(artifact: AetherArtifact, repo: RemoteRepository)(implicit streams: TaskStreams) {
     val request = new DeployRequest()
-    request.setRepository(toRepository(repo, credentials))
+    request.setRepository(repo)
     val parent = artifact.toArtifact
     request.addArtifact(parent)
     artifact.subartifacts.foreach(s => request.addArtifact(s.toArtifact(parent)))
@@ -91,8 +96,9 @@ object Aether extends sbt.Plugin {
   }
 }
 
-case class MavenCoordinates(groupId: String, artifactId: String, version: String, classifier: Option[String], extension: String = "jar") {
+case class MavenCoordinates(groupId: String, artifactId: String, version: String, classifier: Option[String], extension: String = "jar", props: Map[String, String] = Map.empty) {
   def coordinates = "%s:%s:%s%s:%s".format(groupId, artifactId, extension, classifier.map(_ + ":").getOrElse(""), version)
+  def addProperty(name: String, value: String) = copy(props = props + (name -> value))
 }
 
 object MavenCoordinates {
@@ -112,13 +118,16 @@ case class AetherSubArtifact(file: File, classifier: Option[String] = None, exte
 }
 
 case class AetherArtifact(file: File, coordinates: MavenCoordinates, subartifacts: Seq[AetherSubArtifact] = Nil) {
-  def toArtifact = new DefaultArtifact(
-    coordinates.groupId,
-    coordinates.artifactId,
-    coordinates.classifier.orNull,
-    coordinates.extension,
-    coordinates.version,
-    Collections.emptyMap[String, String](),
-    file
-  )
+  def toArtifact = {
+    import scala.collection.JavaConverters._
+    new DefaultArtifact(
+      coordinates.groupId,
+      coordinates.artifactId,
+      coordinates.classifier.orNull,
+      coordinates.extension,
+      coordinates.version,
+      coordinates.props.asJava,
+      file
+    )
+  }
 }

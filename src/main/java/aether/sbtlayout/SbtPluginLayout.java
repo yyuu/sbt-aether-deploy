@@ -10,10 +10,14 @@ import java.net.URI;
  * @author Erlend Hamnaberg<erlend@hamnaberg.net>
  */
 public class SbtPluginLayout implements RepositoryLayout {
+
+    public static final String SBT_VERSION = "sbt-version";
+    public static final String SCALA_VERSION = "scala-version";
+
     @Override
     public URI getPath(Artifact artifact) {
-        String sbtVersion = artifact.getProperty("sbt-version", "0.12");
-        String scalaVersion = artifact.getProperty("scala-version", "2.9.2");
+        String sbtVersion = artifact.getProperty(SBT_VERSION, "0.12");
+        String scalaVersion = artifact.getProperty(SCALA_VERSION, "2.9.2");
 
         StringBuilder path = new StringBuilder(128);
 
