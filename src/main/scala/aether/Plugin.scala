@@ -25,10 +25,10 @@ object Aether extends sbt.Plugin {
 
   lazy val defaultCoordinates = coordinates <<= (organization, name, version, scalaBinaryVersion, sbtPlugin).apply{
     (o, n, v, scalaV, plugin) => {
-      if (plugin) {
+      /*if (plugin) {
         sys.error("SBT is using maven incorrectly, meaning you will have to use sbt publish for sbt-plugins")
-      }
-      val aId = "%s_%s".format(n, scalaV)
+      }*/
+      val aId = if (plugin) n else "%s_%s".format(n, scalaV)
       MavenCoordinates(o, aId, v, None)
     }
   }
@@ -61,7 +61,7 @@ object Aether extends sbt.Plugin {
         val coords = artifact.coordinates.addProperty(SbtPluginLayout.SBT_VERSION, sbtV).addProperty(SbtPluginLayout.SCALA_VERSION, scalaV)
         artifact.copy(coordinates = coords)
       } else artifact
-      deployIt(artifact, toRepository(repository, plugin, maybeCred))(s)
+      deployIt(actualArtifact, toRepository(repository, plugin, maybeCred))(s)
     }}
 
   private def getActualExtension(file: File) = {

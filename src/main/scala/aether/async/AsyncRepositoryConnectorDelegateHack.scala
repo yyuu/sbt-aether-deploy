@@ -17,7 +17,8 @@ class AsyncRepositoryConnectorDelegateHack(repository: RemoteRepository, session
     if ("sbt-plugin".equals(repository.getContentType)) {
       val hack = new RemoteRepository(repository).setContentType("default")
       val del = new AsyncRepositoryConnector(hack, session, fileProcessor, logger)
-      val field = scala.util.control.Exception.allCatch.opt(del.getClass.getField("layout"))
+      val field = scala.util.control.Exception.allCatch.opt(del.getClass.getDeclaredField("layout"))
+
       field.foreach{ f =>
         f.setAccessible(true)
         f.set(del, new SbtPluginLayout)
