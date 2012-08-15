@@ -1,5 +1,6 @@
 package aether
 
+import connector.{SbtWagonRepositoryConnectorFactory, SbtAsyncRepositoryConnectorFactory}
 import org.sonatype.aether.repository.LocalRepository
 import org.sonatype.aether.{RepositorySystemSession, RepositorySystem}
 import java.io.File
@@ -11,15 +12,14 @@ import org.apache.maven.repository.internal.{MavenServiceLocator, MavenRepositor
 import sbt.std.TaskStreams
 import org.apache.maven.wagon.providers.ssh.jsch.{SftpWagon, ScpWagon}
 import org.apache.maven.wagon.providers.ftp.FtpWagon
-import org.sonatype.aether.connector.async.AsyncRepositoryConnectorFactory2
 import org.sonatype.aether.impl.MetadataGeneratorFactory
 
 object Booter {
   def newRepositorySystem(plugin: Boolean) = {
     val locator = new MavenServiceLocator()
     locator.addService(classOf[RepositoryConnectorFactory], classOf[FileRepositoryConnectorFactory])
-    locator.addService(classOf[RepositoryConnectorFactory], classOf[AsyncRepositoryConnectorFactory2])
-    locator.addService(classOf[RepositoryConnectorFactory], classOf[WagonRepositoryConnectorFactory])
+    locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtAsyncRepositoryConnectorFactory])
+    locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtWagonRepositoryConnectorFactory])
     locator.setServices(classOf[WagonProvider], ManualWagonProvider)
     if (plugin) {
       locator.setServices(classOf[MetadataGeneratorFactory])
