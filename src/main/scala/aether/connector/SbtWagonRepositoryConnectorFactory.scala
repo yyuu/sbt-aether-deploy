@@ -12,7 +12,7 @@ class SbtWagonRepositoryConnectorFactory extends WagonRepositoryConnectorFactory
   override def newInstance(session: RepositorySystemSession, repository: RemoteRepository) = {
     if ("sbt-plugin".equals(repository.getContentType)) {
       val instance = super.newInstance(session, new RemoteRepository(repository).setContentType("default"))
-      scala.util.control.Exception.allCatch.opt(instance.getClass.getDeclaredField("layout")).foreach {
+      scala.util.control.Exception.allCatch.opt(Option(instance.getClass.getDeclaredField("layout"))).flatten.foreach {
         f =>
           f.setAccessible(true)
           f.set(instance, new SbtPluginLayout)
