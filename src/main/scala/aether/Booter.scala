@@ -1,13 +1,12 @@
 package aether
 
-import connector.{SbtWagonRepositoryConnectorFactory, SbtAsyncRepositoryConnectorFactory}
+import connector.{SbtFileRepositoryConnectorFactory, SbtWagonRepositoryConnectorFactory}
 import org.sonatype.aether.repository.LocalRepository
 import org.sonatype.aether.{RepositorySystemSession, RepositorySystem}
 import java.io.File
 import org.sonatype.aether.spi.connector.RepositoryConnectorFactory
 import org.apache.maven.wagon.Wagon
-import org.sonatype.aether.connector.wagon.{PlexusWagonConfigurator, WagonConfigurator, WagonRepositoryConnectorFactory, WagonProvider}
-import org.sonatype.aether.connector.file.FileRepositoryConnectorFactory
+import org.sonatype.aether.connector.wagon.{PlexusWagonConfigurator, WagonConfigurator, WagonProvider}
 import org.apache.maven.repository.internal.{MavenServiceLocator, MavenRepositorySystemSession}
 import sbt.std.TaskStreams
 import org.sonatype.aether.impl.MetadataGeneratorFactory
@@ -19,7 +18,7 @@ object Booter {
     locator.setServices(classOf[WagonProvider], new ExtraWagonProvider(wagons))
     locator.setService(classOf[WagonConfigurator], classOf[PlexusWagonConfigurator])
     locator.setServices(classOf[RepositoryConnectorFactory], factory)
-    locator.addService(classOf[RepositoryConnectorFactory], classOf[FileRepositoryConnectorFactory])
+    locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtFileRepositoryConnectorFactory])
     locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtWagonRepositoryConnectorFactory])
     factory.initService(locator)
     if (plugin) {

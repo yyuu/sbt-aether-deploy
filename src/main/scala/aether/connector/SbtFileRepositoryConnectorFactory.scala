@@ -1,13 +1,13 @@
 package aether.connector
 
-import org.sonatype.aether.connector.wagon.WagonRepositoryConnectorFactory
+import org.sonatype.aether.connector.file.FileRepositoryConnectorFactory
 import org.sonatype.aether.RepositorySystemSession
 import org.sonatype.aether.repository.RemoteRepository
 
 /**
- * @author Erlend Hamnaberg<erlend@hamnaberg.net>
+ * @author Erlend Hamnaberg<erlend.hamnaberg@arktekk.no>
  */
-class SbtWagonRepositoryConnectorFactory extends WagonRepositoryConnectorFactory with SbtPluginRepositoryConnectorFactory {
+class SbtFileRepositoryConnectorFactory extends FileRepositoryConnectorFactory with SbtPluginRepositoryConnectorFactory {
   override def newInstance(session: RepositorySystemSession, repository: RemoteRepository) = {
     super.newInstance(session, repository)
   }
