@@ -6,21 +6,22 @@ import org.sonatype.aether.{RepositorySystemSession, RepositorySystem}
 import java.io.File
 import org.sonatype.aether.spi.connector.RepositoryConnectorFactory
 import org.apache.maven.wagon.Wagon
-import org.sonatype.aether.connector.wagon.{WagonRepositoryConnectorFactory, WagonProvider}
+import org.sonatype.aether.connector.wagon.{PlexusWagonConfigurator, WagonConfigurator, WagonRepositoryConnectorFactory, WagonProvider}
 import org.sonatype.aether.connector.file.FileRepositoryConnectorFactory
 import org.apache.maven.repository.internal.{MavenServiceLocator, MavenRepositorySystemSession}
 import sbt.std.TaskStreams
-import org.apache.maven.wagon.providers.ssh.jsch.{SftpWagon, ScpWagon}
-import org.apache.maven.wagon.providers.ftp.FtpWagon
 import org.sonatype.aether.impl.MetadataGeneratorFactory
 
 object Booter {
-  def newRepositorySystem(plugin: Boolean) = {
+  def newRepositorySystem(plugin: Boolean, wagons: Seq[WagonWrapper]) = {
     val locator = new MavenServiceLocator()
+    val factory = new SbtWagonRepositoryConnectorFactory()
+    locator.setServices(classOf[WagonProvider], new ExtraWagonProvider(wagons))
+    locator.setService(classOf[WagonConfigurator], classOf[PlexusWagonConfigurator])
+    locator.setServices(classOf[RepositoryConnectorFactory], factory)
     locator.addService(classOf[RepositoryConnectorFactory], classOf[FileRepositoryConnectorFactory])
-    locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtAsyncRepositoryConnectorFactory])
     locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtWagonRepositoryConnectorFactory])
-    locator.setServices(classOf[WagonProvider], ManualWagonProvider)
+    factory.initService(locator)
     if (plugin) {
       locator.setServices(classOf[MetadataGeneratorFactory])
     }
@@ -37,17 +38,20 @@ object Booter {
       session
   }
 
-  //TODO: Separate this into its own plugin.
-  object ManualWagonProvider extends WagonProvider {
+  private class ExtraWagonProvider(wagons: Seq[WagonWrapper]) extends WagonProvider {
+    private val map = wagons.map(w => w.scheme -> w.wagon).toMap
+
     def lookup(roleHint: String ): Wagon = {
-      roleHint match {
-        case "scp" => new ScpWagon()
-        case "sftp" => new SftpWagon()
-        case "ftp" => new FtpWagon()
-        case _ => throw new IllegalArgumentException("Unknown wagon type")
-      }
+      map.get(roleHint).getOrElse(throw new IllegalArgumentException("Unknown wagon type"))
     }
 
-    def release(wagon: Wagon){}
+    def release(wagon: Wagon){
+      try {
+        if (wagon != null) wagon.disconnect()
+      }
+      catch {
+        case e:Exception => e.printStackTrace()
+      }
+    }
   }
 }
