@@ -1,26 +1,38 @@
 package aether
 
-import connector.{SbtFileRepositoryConnectorFactory, SbtWagonRepositoryConnectorFactory}
-import org.sonatype.aether.repository.LocalRepository
+import connector.SbtPluginRepositoryConnectorFactory
+import org.sonatype.aether.repository.{RemoteRepository, LocalRepository}
 import org.sonatype.aether.{RepositorySystemSession, RepositorySystem}
 import java.io.File
 import org.sonatype.aether.spi.connector.RepositoryConnectorFactory
 import org.apache.maven.wagon.Wagon
-import org.sonatype.aether.connector.wagon.{PlexusWagonConfigurator, WagonConfigurator, WagonProvider}
+import org.sonatype.aether.connector.wagon.{WagonRepositoryConnectorFactory, PlexusWagonConfigurator, WagonConfigurator, WagonProvider}
 import org.apache.maven.repository.internal.{MavenServiceLocator, MavenRepositorySystemSession}
 import sbt.std.TaskStreams
 import org.sonatype.aether.impl.MetadataGeneratorFactory
+import org.sonatype.aether.connector.file.FileRepositoryConnectorFactory
+import org.sonatype.aether.connector.async.AsyncRepositoryConnectorFactory
+import org.sonatype.aether.transfer.NoRepositoryConnectorException
 
 object Booter {
   def newRepositorySystem(plugin: Boolean, wagons: Seq[WagonWrapper]) = {
     val locator = new MavenServiceLocator()
-    val factory = new SbtWagonRepositoryConnectorFactory()
+    val connectors = List(
+      new SbtPluginRepositoryConnectorFactory(new AsyncRepositoryConnectorFactory()) {
+        override def newInstance(session: RepositorySystemSession, repository: RemoteRepository) = {
+          if ("dav".equals(repository.getProtocol)) {
+            throw new NoRepositoryConnectorException(repository, "Dav not supported")
+          }
+          super.newInstance(session, repository)
+        }
+      },
+      new SbtPluginRepositoryConnectorFactory(new WagonRepositoryConnectorFactory()),
+      new SbtPluginRepositoryConnectorFactory(new FileRepositoryConnectorFactory())
+    )
     locator.setServices(classOf[WagonProvider], new ExtraWagonProvider(wagons))
     locator.setService(classOf[WagonConfigurator], classOf[PlexusWagonConfigurator])
-    locator.setServices(classOf[RepositoryConnectorFactory], factory)
-    locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtFileRepositoryConnectorFactory])
-    locator.addService(classOf[RepositoryConnectorFactory], classOf[SbtWagonRepositoryConnectorFactory])
-    factory.initService(locator)
+    locator.setServices(classOf[RepositoryConnectorFactory], connectors: _*)
+    connectors.foreach(_.initService(locator))
     if (plugin) {
       locator.setServices(classOf[MetadataGeneratorFactory])
     }
@@ -41,6 +53,7 @@ object Booter {
     private val map = wagons.map(w => w.scheme -> w.wagon).toMap
 
     def lookup(roleHint: String ): Wagon = {
+      println("LOOOKUP!!!")
       map.get(roleHint).getOrElse(throw new IllegalArgumentException("Unknown wagon type"))
     }
 
