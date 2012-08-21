@@ -53,7 +53,6 @@ object Booter {
     private val map = wagons.map(w => w.scheme -> w.wagon).toMap
 
     def lookup(roleHint: String ): Wagon = {
-      println("LOOOKUP!!!")
       map.get(roleHint).getOrElse(throw new IllegalArgumentException("Unknown wagon type"))
     }
 
