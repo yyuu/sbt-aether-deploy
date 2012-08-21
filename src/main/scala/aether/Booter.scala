@@ -20,7 +20,7 @@ object Booter {
     val connectors = List(
       new SbtPluginRepositoryConnectorFactory(new AsyncRepositoryConnectorFactory()) {
         override def newInstance(session: RepositorySystemSession, repository: RemoteRepository) = {
-          if ("dav".equals(repository.getProtocol)) {
+          if (Option(repository.getProtocol).filter(_.contains("dav")).isDefined) {
             throw new NoRepositoryConnectorException(repository, "Dav not supported")
           }
           super.newInstance(session, repository)
