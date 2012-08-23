@@ -67,11 +67,12 @@ object Aether extends sbt.Plugin {
     
   private def toRepository(repo: MavenRepository, plugin: Boolean, credentials: Option[DirectCredentials]):RemoteRepository = {
     val contentType = if (plugin) "sbt-plugin" else "default"
-    val r = new RemoteRepository(repo.name, contentType, repo.root)
+    val repository = new RemoteRepository(repo.name, contentType, repo.root)
     credentials.foreach(c => {
-      r.setAuthentication(new Authentication(c.userName, c.passwd))
+      repository.setAuthentication(new Authentication(c.userName, c.passwd))
     })
-    r
+    repository.setProxy(aether.Booter.SystemPropertyProxySelector.getProxy(repository))
+    repository
   }
 
   private def deployIt(artifact: AetherArtifact, wagons: Seq[WagonWrapper], repo: RemoteRepository)(implicit streams: TaskStreams) {
