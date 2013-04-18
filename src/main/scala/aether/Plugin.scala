@@ -24,7 +24,7 @@ object Aether extends sbt.Plugin {
     installTask
   )
 
-  lazy val aetherPublishSettings: Seq[Setting[_]] = aetherSettings ++ Seq(publish <<= deploy)
+  lazy val aetherPublishSettings: Seq[Setting[_]] = aetherSettings ++ Seq(publish <<= deploy, publishLocal <<= install)
 
   lazy val defaultCoordinates = coordinates <<= (organization, name, version, scalaBinaryVersion, crossPaths, sbtPlugin).apply{
     (o, n, v, scalaV, crossPath, plugin) => {
