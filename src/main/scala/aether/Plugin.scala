@@ -61,22 +61,9 @@ object Aether extends sbt.Plugin {
       deployIt(artifact, wag, repository, maybeCred)(s)
     }}
 
-  lazy val installTask = install <<= (publishTo, wagons, credentials, aetherArtifact, streams).map{
-    (repo: Option[Resolver], wag: Seq[WagonWrapper], cred: Seq[Credentials], artifact: AetherArtifact, s: TaskStreams) => {
-      val repository = repo.collect{
-        case x: MavenRepository => x
-        case _ => sys.error("The configured repo MUST be a maven repo")
-      }.getOrElse(sys.error("There MUST be a configured publish repo"))
-      val maybeCred = scala.util.control.Exception.allCatch.apply {
-        val href = URI.create(repository.root)
-        val c = Credentials.forHost(cred, href.getHost)
-        if (c.isEmpty) {
-           s.log.warn("No credentials supplied for %s".format(href.getHost))
-        }
-        c
-      }
-
-      installIt(artifact, wag, repository, maybeCred)(s)
+  lazy val installTask = install <<= (wagons, aetherArtifact, streams).map{
+    (wag: Seq[WagonWrapper], artifact: AetherArtifact, s: TaskStreams) => {
+      installIt(artifact, wag)(s)
     }}
 
   def createArtifact(artifacts: Map[Artifact, sbt.File], pom: sbt.File, coords: MavenCoordinates, mainArtifact: sbt.File): AetherArtifact = {
@@ -121,14 +108,13 @@ object Aether extends sbt.Plugin {
     }
   }
 
-  private def installIt(artifact: AetherArtifact, wagons: Seq[WagonWrapper], repo: MavenRepository, credentials: Option[DirectCredentials])(implicit streams: TaskStreams) {
+  private def installIt(artifact: AetherArtifact, wagons: Seq[WagonWrapper])(implicit streams: TaskStreams) {
     val request = new InstallRequest()
-//  request.setRepository(toRepository(repo, credentials))
     val parent = artifact.toArtifact
     request.addArtifact(parent)
     artifact.subartifacts.foreach(s => request.addArtifact(s.toArtifact(parent)))
     implicit val system = Booter.newRepositorySystem(wagons)
-    implicit val localRepo = Path.userHome / ".m2" / "repository" // FIXME: use path given as repo:MavenRepository
+    implicit val localRepo = Path.userHome / ".m2" / "repository"
 
     try {
       system.install(Booter.newSession, request)
